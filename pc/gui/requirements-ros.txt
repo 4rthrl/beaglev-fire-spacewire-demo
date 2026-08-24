@@ -1,0 +1,6 @@
+# GUI dependency (same as requirements.txt)
+PySide6>=6.5.0
+
+# ROS 2 Jazzy packages (rclpy, std_srvs, sensor_msgs, diagnostic_msgs)
+# are installed via apt after sourcing /opt/ros/jazzy/setup.bash.
+# They are intentionally not listed as pip dependencies.

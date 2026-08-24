@@ -1,0 +1,36 @@
+(version 1)
+
+# SpaceWire controlled-impedance trace width
+(rule "SpaceWire LVDS width"
+    (condition "A.hasNetclass('SPACEWIRE_LVDS')")
+    (constraint track_width (min 0.15mm) (opt 0.15mm) (max 0.15mm))
+)
+
+(rule "SpaceWire LVDS gap"
+    (condition "A.hasNetclass('SPACEWIRE_LVDS')")
+    (constraint diff_pair_gap (min 0.18mm) (opt 0.19mm))
+)
+
+# Maximum P/N mismatch inside every differential pair
+(rule "SpaceWire P-N skew"
+    (condition "A.hasNetclass('SPACEWIRE_LVDS')")
+    (constraint skew (max 3mm) (within_diff_pairs))
+)
+
+# No vias allowed on SpaceWire LVDS nets
+(rule "SpaceWire no vias"
+    (condition "A.hasNetclass('SPACEWIRE_LVDS')")
+    (constraint via_count (max 0))
+)
+
+# TX Data versus Strobe length matching
+(rule "SpaceWire TX Data-Strobe matching"
+    (condition "A.NetName == '/DATA_OUT_P' || A.NetName == '/DATA_OUT_N' || A.NetName == '/STROBE_OUT_P' || A.NetName == '/STROBE_OUT_N'")
+    (constraint skew (max 5mm))
+)
+
+# RX Data versus Strobe length matching
+(rule "SpaceWire RX Data-Strobe matching"
+    (condition "A.NetName == '/DIN_P' || A.NetName == '/DIN_N' || A.NetName == '/SIN_P' || A.NetName == '/SIN_N'")
+    (constraint skew (max 5mm))
+)

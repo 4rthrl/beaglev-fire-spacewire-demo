@@ -1,0 +1,40 @@
+# KiCad temporary / local files
+*.kicad_prl
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.bak
+~*.lck
+*-backups/
+fp-info-cache
+
+# Generated manufacturing outputs
+fabrication/
+
+# Archives
+*.zip
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+*~
+.history/
+
+# Third-party CAD library assets
+# Kept locally but not redistributed in this repository.
+3D/
+
+symbols/2026-08-18_08-47-44.kicad_sym
+symbols/D9LVRA2DEMRQ1.kicad_sym
+symbols/DS90LV027ATM_NOPB.kicad_sym
+symbols/MDM-9SBSP.kicad_sym
+symbols/QTH-020-01-X-D-DP-A.kicad_sym
+
+footprints/syzygy_connector_LIB.pretty/DCT8.kicad_mod
+footprints/syzygy_connector_LIB.pretty/MDM9SBSP.kicad_mod
+footprints/syzygy_connector_LIB.pretty/SAMTEC_QTH-020-01-X-D-DP-A.kicad_mod
+footprints/syzygy_connector_LIB.pretty/SOIC127P600X175-8N.kicad_mod
+footprints/syzygy_connector_LIB.pretty/SON50P200X200X80-8N.kicad_mod
+
+# Company logo footprints - kept locally, not redistributed
+footprints/syzygy_connector_LIB.pretty/OIP.kicad_mod
+footprints/syzygy_connector_LIB.pretty/OIP_Small.kicad_mod

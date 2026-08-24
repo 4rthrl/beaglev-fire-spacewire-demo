@@ -1,0 +1,8 @@
+/**:
+  ros__parameters:
+    analyzers:
+      spacewire:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: SpaceWire
+        contains:
+          - "SpaceWire Link"

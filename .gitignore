@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ROS / colcon
+build/
+install/
+log/
+
+# Python environments
+.venv/
+venv/
+
+# Local runtime libraries
+.local_libs/
+
+# Editors
+.vscode/
+.idea/
+.history/
+*~
+
+# KiCad temporary / recovery files
+~*.lck
+*.kicad_prl
+_restore_backup_*/
+*-backups/
+
+# OS
+.DS_Store
+Thumbs.db
