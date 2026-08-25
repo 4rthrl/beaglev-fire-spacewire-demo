@@ -1,6 +1,7 @@
 """Hardware backend factory for the SpaceWire gateway."""
 
 from spacewire_gateway.hardware.base import (
+    CameraHousekeeping,
     ReceivedImage,
     SpaceWireHardware,
     SpaceWireStatus,
@@ -19,6 +20,7 @@ def create_hardware(backend: str) -> SpaceWireHardware:
 
 __all__ = [
     'BeagleVSpaceWireHardware',
+    'CameraHousekeeping',
     'MockSpaceWireHardware',
     'ReceivedImage',
     'SpaceWireHardware',

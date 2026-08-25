@@ -25,6 +25,7 @@ from __future__ import annotations
 import time
 
 from spacewire_gateway.hardware.base import (
+    CameraHousekeeping,
     ReceivedImage,
     SpaceWireHardware,
     SpaceWireStatus,
@@ -39,6 +40,15 @@ _IMAGE_STEP = _IMAGE_WIDTH * 3
 _IMAGE_HEADER = bytes((0xC1, 0x02, 0x40, 0x40))
 _IMAGE_DATA_BYTES = _IMAGE_WIDTH * _IMAGE_HEIGHT * 3
 _IMAGE_PACKET_BYTES = len(_IMAGE_HEADER) + _IMAGE_DATA_BYTES
+
+# Camera housekeeping response:
+#   C1 F0 00 40
+#   followed by the complete 256-byte register window (64 x 32-bit words).
+_HOUSEKEEPING_HEADER = bytes((0xC1, 0xF0, 0x00, 0x40))
+_HOUSEKEEPING_REGISTER_BYTES = 256
+_HOUSEKEEPING_PACKET_BYTES = (
+    len(_HOUSEKEEPING_HEADER) + _HOUSEKEEPING_REGISTER_BYTES
+)
 
 # FPGA command-handler pattern values are 0..7.
 _MIN_PATTERN = 0
@@ -190,6 +200,62 @@ class BeagleVSpaceWireHardware(SpaceWireHardware):
 
         return None
 
+    def get_housekeeping(
+        self,
+    ) -> tuple[bool, str, CameraHousekeeping | None]:
+        """Request and decode a complete camera housekeeping snapshot."""
+
+        # Image reception and housekeeping share the same DMA receiver.
+        if self._request_in_flight:
+            return (
+                False,
+                "Cannot request housekeeping while an image request is active",
+                None,
+            )
+
+        snapshot = self._debugger.spacewire_snapshot()
+        if not (snapshot["status"] & 0x4):
+            return False, "SpaceWire link is not running", None
+
+        try:
+            # Arm the same DMA receiver, now for the shorter HK packet.
+            self._debugger.dma_prepare(_HOUSEKEEPING_PACKET_BYTES)
+
+            # GET_HOUSEKEEPING = 0x30.
+            # Debugger.send() appends SpaceWire EOP.
+            self._debugger.send([0x30], eop=True)
+
+            deadline = time.monotonic() + _REQUEST_TIMEOUT_S
+
+            while True:
+                dma_status = self._debugger.dma_status_raw()
+
+                if dma_status & 0xE:
+                    return (
+                        False,
+                        f"Housekeeping DMA error "
+                        f"0x{dma_status:08X}",
+                        None,
+                    )
+
+                if dma_status & 0x1:
+                    break
+
+                if time.monotonic() >= deadline:
+                    return False, "Housekeeping receive timeout", None
+
+                time.sleep(0.02)
+
+            packet = self._debugger.dma_read_bytes(
+                _HOUSEKEEPING_PACKET_BYTES
+            )
+            registers = self._packet_to_housekeeping(packet)
+
+        except Exception as exc:
+            return False, f"Housekeeping request failed: {exc}", None
+
+        return True, "Camera housekeeping received", registers
+
     def shutdown(self) -> None:
         self._clear_request_state()
 
@@ -205,6 +271,92 @@ class BeagleVSpaceWireHardware(SpaceWireHardware):
         # BB = 0x00 (Bayer selection is irrelevant for direct RGB output)
         # Debugger.send() appends EOP.
         self._debugger.send([0x12, pattern, 0x00], eop=True)
+
+    def _packet_to_housekeeping(
+        self,
+        packet: bytes,
+    ) -> CameraHousekeeping:
+        """Decode the FPGA register window into named housekeeping fields."""
+
+        if len(packet) != _HOUSEKEEPING_PACKET_BYTES:
+            raise ValueError(
+                f"wrong housekeeping packet size {len(packet)}, "
+                f"expected {_HOUSEKEEPING_PACKET_BYTES}"
+            )
+
+        header = packet[:4]
+        if header != _HOUSEKEEPING_HEADER:
+            raise ValueError(
+                "bad housekeeping header: "
+                + " ".join(f"{byte:02X}" for byte in header)
+            )
+
+        payload = packet[4:]
+
+        registers = {
+            offset: int.from_bytes(
+                payload[offset:offset + 4],
+                byteorder="big",
+                signed=False,
+            )
+            for offset in range(0, _HOUSEKEEPING_REGISTER_BYTES, 4)
+        }
+
+        def signed32(value: int) -> int:
+            if value & 0x80000000:
+                return value - 0x100000000
+            return value
+
+        return CameraHousekeeping(
+            device_id=registers[0x00],
+            destination_address=registers[0x04],
+            protocol_id=registers[0x08],
+            protocol_version=registers[0x0C],
+            fw_version=registers[0x10],
+            register_map_version=registers[0x14],
+            capabilities=registers[0x18],
+
+            bist_status=registers[0x20],
+            operating_mode=registers[0x24],
+            image_source=registers[0x28],
+            pattern=registers[0x2C],
+            bayer=registers[0x30],
+            camera_status=registers[0x34],
+            last_error=registers[0x38],
+
+            integration_time=registers[0x40],
+            lup_config=registers[0x44],
+            image_corrections=registers[0x48],
+            nuc_lut_version=registers[0x4C],
+            bp_lut_version=registers[0x50],
+            test_pattern_a_version=registers[0x54],
+            test_pattern_b_version=registers[0x58],
+            image_size=registers[0x5C],
+
+            tc_counter=registers[0x60],
+            last_tc_id=registers[0x64],
+            last_tc_status=registers[0x68],
+            frame_counter=registers[0x6C],
+            abort_counter=registers[0x70],
+            command_error_counter=registers[0x74],
+            uptime_seconds=registers[0x78],
+
+            monitor_valid=registers[0x80],
+            temp_detector=signed32(registers[0x84]),
+            vdd20_voltage=registers[0x88],
+            core_1v2_current=registers[0x8C],
+            core_1v2_voltage=registers[0x90],
+            io_3v3_current=registers[0x94],
+            io_3v3_voltage=registers[0x98],
+            input_5v_current=registers[0x9C],
+            temp_fpga=signed32(registers[0xA0]),
+            temp_power=signed32(registers[0xA4]),
+
+            spw_rx_packet_counter=registers[0xC0],
+            spw_tx_packet_counter=registers[0xC4],
+            spw_error_counter=registers[0xC8],
+            last_spw_error=registers[0xCC],
+        )
 
     def _packet_to_image(self, packet: bytes) -> ReceivedImage:
         if len(packet) != _IMAGE_PACKET_BYTES:
