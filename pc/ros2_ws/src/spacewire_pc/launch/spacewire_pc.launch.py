@@ -17,6 +17,8 @@ def generate_launch_description():
         '/spacewire/connect:=/spacewire/link/connect',
         '/spacewire/disconnect:=/spacewire/link/disconnect',
         '/camera/request_image:=/spacewire/camera/request_image',
+        '/camera/get_housekeeping:=/spacewire/camera/get_housekeeping',
+        '/camera/housekeeping:=/spacewire/camera/housekeeping',
     ]
 
     aggregator = Node(
