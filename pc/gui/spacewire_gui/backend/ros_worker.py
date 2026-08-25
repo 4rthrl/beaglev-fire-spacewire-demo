@@ -21,7 +21,10 @@ from spacewire_gui.backend.ros_constants import (
     DIAGNOSTIC_STATUS_NAME,
     DISCONNECT_SERVICE,
     GATEWAY_NODE,
+    GET_HOUSEKEEPING_SERVICE,
     GUI_NODE_NAME,
+    HOUSEKEEPING_TIMEOUT_MS,
+    HOUSEKEEPING_TOPIC,
     IMAGE_REQUEST_TIMEOUT_MS,
     PATTERN_PARAMETER,
     REQUEST_IMAGE_SERVICE,
@@ -29,6 +32,7 @@ from spacewire_gui.backend.ros_constants import (
 )
 from spacewire_gui.backend.ros_image import ros_image_to_qimage
 from spacewire_gui.models.diagnostics_mapping import merge_key_values
+from spacewire_gui.models.housekeeping_mapping import parse_diagnostic_array
 from spacewire_gui.models.image_patterns import ALL_PATTERNS, PATTERN_LABELS
 from spacewire_gui.models.spacewire_status import SpaceWireStatus
 
@@ -36,6 +40,7 @@ from spacewire_gui.models.spacewire_status import SpaceWireStatus
 class RosWorker(QObject):
     status_ready = Signal(object)
     image_ready = Signal(object)
+    housekeeping_ready = Signal(object)
     operation_finished = Signal(str, bool, str)
     worker_log = Signal(str)
     worker_error = Signal(str)
@@ -45,6 +50,7 @@ class RosWorker(QObject):
     disconnect_requested = Signal()
     pattern_set_requested = Signal(int)
     capture_requested = Signal(int)
+    housekeeping_requested = Signal()
     shutdown_requested = Signal()
 
     def __init__(self) -> None:
@@ -53,11 +59,14 @@ class RosWorker(QObject):
         self._executor: SingleThreadedExecutor | None = None
         self._spin_timer: QTimer | None = None
         self._image_timeout_timer: QTimer | None = None
+        self._housekeeping_timeout_timer: QTimer | None = None
         self._param_client: AsyncParameterClient | None = None
         self._connect_client: Any = None
         self._disconnect_client: Any = None
         self._request_image_client: Any = None
+        self._housekeeping_client: Any = None
         self._image_pending = False
+        self._housekeeping_pending = False
         self._selected_pattern: int | None = None
         self._diagnostic_status = SpaceWireStatus()
         self._missing_diag_logged = False
@@ -72,6 +81,9 @@ class RosWorker(QObject):
         )
         self.capture_requested.connect(
             self._on_capture_requested, Qt.ConnectionType.QueuedConnection
+        )
+        self.housekeeping_requested.connect(
+            self._on_housekeeping_requested, Qt.ConnectionType.QueuedConnection
         )
         self.shutdown_requested.connect(self.teardown, Qt.ConnectionType.QueuedConnection)
 
@@ -91,6 +103,9 @@ class RosWorker(QObject):
         self._connect_client = self._node.create_client(Trigger, CONNECT_SERVICE)
         self._disconnect_client = self._node.create_client(Trigger, DISCONNECT_SERVICE)
         self._request_image_client = self._node.create_client(Trigger, REQUEST_IMAGE_SERVICE)
+        self._housekeeping_client = self._node.create_client(
+            Trigger, GET_HOUSEKEEPING_SERVICE
+        )
 
         self._node.create_subscription(
             DiagnosticArray,
@@ -104,6 +119,12 @@ class RosWorker(QObject):
             self._on_image,
             10,
         )
+        self._node.create_subscription(
+            DiagnosticArray,
+            HOUSEKEEPING_TOPIC,
+            self._on_housekeeping,
+            10,
+        )
 
         self._spin_timer = QTimer(self)
         self._spin_timer.timeout.connect(self._spin_once)
@@ -112,6 +133,10 @@ class RosWorker(QObject):
         self._image_timeout_timer = QTimer(self)
         self._image_timeout_timer.setSingleShot(True)
         self._image_timeout_timer.timeout.connect(self._on_image_timeout)
+
+        self._housekeeping_timeout_timer = QTimer(self)
+        self._housekeeping_timeout_timer.setSingleShot(True)
+        self._housekeeping_timeout_timer.timeout.connect(self._on_housekeeping_timeout)
 
         self.worker_log.emit("ROS worker started")
 
@@ -125,6 +150,10 @@ class RosWorker(QObject):
             self._image_timeout_timer.stop()
             self._image_timeout_timer = None
 
+        if self._housekeeping_timeout_timer is not None:
+            self._housekeeping_timeout_timer.stop()
+            self._housekeeping_timeout_timer = None
+
         if self._executor is not None and self._node is not None:
             self._executor.remove_node(self._node)
 
@@ -137,7 +166,9 @@ class RosWorker(QObject):
         self._connect_client = None
         self._disconnect_client = None
         self._request_image_client = None
+        self._housekeeping_client = None
         self._image_pending = False
+        self._housekeeping_pending = False
         self._selected_pattern = None
         self._diagnostic_status = SpaceWireStatus()
 
@@ -176,6 +207,10 @@ class RosWorker(QObject):
         self._clear_image_pending()
         self.image_ready.emit(image)
 
+    def _on_housekeeping(self, msg: DiagnosticArray) -> None:
+        snapshot = parse_diagnostic_array(msg)
+        self.housekeeping_ready.emit(snapshot)
+
     def _on_image_timeout(self) -> None:
         if not self._image_pending:
             return
@@ -186,6 +221,11 @@ class RosWorker(QObject):
         self._image_pending = False
         if self._image_timeout_timer is not None:
             self._image_timeout_timer.stop()
+
+    def _clear_housekeeping_pending(self) -> None:
+        self._housekeeping_pending = False
+        if self._housekeeping_timeout_timer is not None:
+            self._housekeeping_timeout_timer.stop()
 
     @Slot()
     def _on_connect(self) -> None:
@@ -262,6 +302,11 @@ class RosWorker(QObject):
             return
         if self._image_pending:
             return
+        if self._housekeeping_pending:
+            self.worker_error.emit(
+                "Cannot request an image while housekeeping is in progress"
+            )
+            return
         if self._param_client is None:
             self.worker_error.emit("ROS parameter client is not ready")
             return
@@ -332,6 +377,63 @@ class RosWorker(QObject):
 
         if self._image_timeout_timer is not None:
             self._image_timeout_timer.start(IMAGE_REQUEST_TIMEOUT_MS)
+
+    @Slot()
+    def _on_housekeeping_requested(self) -> None:
+        if self._housekeeping_pending:
+            return
+        if self._image_pending:
+            message = "Cannot request housekeeping while an image request is active"
+            self.operation_finished.emit("housekeeping", False, message)
+            self.worker_error.emit(message)
+            return
+        if self._housekeeping_client is None:
+            message = f"{GET_HOUSEKEEPING_SERVICE} client is not ready"
+            self.operation_finished.emit("housekeeping", False, message)
+            self.worker_error.emit(message)
+            return
+
+        if not self._housekeeping_client.wait_for_service(timeout_sec=1.0):
+            message = f"Service unavailable: {GET_HOUSEKEEPING_SERVICE}"
+            self.operation_finished.emit("housekeeping", False, message)
+            self.worker_error.emit(message)
+            return
+
+        self._housekeeping_pending = True
+        future = self._housekeeping_client.call_async(Trigger.Request())
+        future.add_done_callback(self._on_housekeeping_done)
+        if self._housekeeping_timeout_timer is not None:
+            self._housekeeping_timeout_timer.start(HOUSEKEEPING_TIMEOUT_MS)
+
+    def _on_housekeeping_done(self, future: Any) -> None:
+        if not self._housekeeping_pending:
+            return
+
+        self._clear_housekeeping_pending()
+        try:
+            response = future.result()
+        except Exception as exc:  # noqa: BLE001 - surface ROS failures to GUI log
+            message = f"{GET_HOUSEKEEPING_SERVICE} error: {exc}"
+            self.operation_finished.emit("housekeeping", False, message)
+            self.worker_error.emit(message)
+            return
+
+        message = response.message or (
+            "Housekeeping succeeded" if response.success else "Housekeeping failed"
+        )
+        if response.success:
+            self.worker_log.emit(message)
+        else:
+            self.worker_error.emit(message)
+        self.operation_finished.emit("housekeeping", response.success, message)
+
+    def _on_housekeeping_timeout(self) -> None:
+        if not self._housekeeping_pending:
+            return
+        self._clear_housekeeping_pending()
+        message = "Housekeeping request timed out"
+        self.operation_finished.emit("housekeeping", False, message)
+        self.worker_error.emit(message)
 
     def _call_trigger_service(
         self,

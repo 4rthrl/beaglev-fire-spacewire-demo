@@ -90,6 +90,37 @@ of RGB image data.
 
 ---
 
+## `/spacewire/camera/housekeeping`
+
+Type:
+
+```text
+diagnostic_msgs/msg/DiagnosticArray
+```
+
+Published by:
+
+```text
+/spacewire_gateway
+```
+
+Published once after a successful `/spacewire/camera/get_housekeeping` call. It contains one coherent camera register snapshot, already decoded into six `DiagnosticStatus` groups:
+
+```text
+Camera/Identification
+Camera/State
+Camera/Image Configuration
+Camera/Counters
+Camera/Monitors
+Camera/SpaceWire
+```
+
+The gateway includes both human-readable decoded fields and selected raw register values. The GUI does not re-decode FPGA bitfields from the raw window.
+
+See [camera_housekeeping_registers.md](camera_housekeeping_registers.md) for the SpaceWire packet, register map and GUI presentation.
+
+---
+
 ## `/spacewire/diagnostics_agg`
 
 Published by:
@@ -161,6 +192,30 @@ The service request starts the operation, but the image itself is returned async
 ```
 
 The image is therefore not contained in the service response.
+
+---
+
+## `/spacewire/camera/get_housekeeping`
+
+Requests one complete camera housekeeping acquisition.
+
+The service uses:
+
+```text
+std_srvs/srv/Trigger
+```
+
+A successful call causes the gateway to obtain one 256-byte camera register window over SpaceWire and publish it on:
+
+```text
+/spacewire/camera/housekeeping
+```
+
+`GET_HOUSEKEEPING` is itself a telecommand and increments the camera `TC_COUNTER`. The published snapshot already includes that increment.
+
+There are no per-register ROS services. Group and field inspection in the GUI uses the latest published snapshot only.
+
+The register layout and decoded meanings are documented in [camera_housekeeping_registers.md](camera_housekeeping_registers.md).
 
 ---
 
@@ -241,6 +296,20 @@ Inspect the SpaceWire status:
 ros2 topic echo /spacewire/diagnostics --once
 ```
 
+Request camera housekeeping:
+
+```bash
+ros2 service call \
+    /spacewire/camera/get_housekeeping \
+    std_srvs/srv/Trigger
+```
+
+Inspect the housekeeping snapshot:
+
+```bash
+ros2 topic echo /spacewire/camera/housekeeping --once
+```
+
 Disconnect:
 
 ```bash
@@ -269,6 +338,8 @@ The public interface is:
 /spacewire/link/connect
 /spacewire/link/disconnect
 /spacewire/camera/request_image
+/spacewire/camera/get_housekeeping
+/spacewire/camera/housekeeping
 ```
 
 The PC GUI uses matching remappings from:
@@ -276,6 +347,8 @@ The PC GUI uses matching remappings from:
 ```text
 pc/ros2_ws/src/spacewire_pc/launch/spacewire_pc.launch.py
 ```
+
+`./scripts/run_gateway.sh` and `./pc/start_pc.sh` launch those files. Users following the normal startup procedure do not need to supply housekeeping remaps by hand.
 
 This keeps the application code independent of the final external namespace.
 
@@ -314,4 +387,7 @@ ROS 2 / DDS
 GUI
 ```
 
+Housekeeping follows the same control path as other services. One `/spacewire/camera/get_housekeeping` call returns one register snapshot on `/spacewire/camera/housekeeping`.
+
 For the complete hardware and software data flow, see [architecture.md](architecture.md).
+For the camera register window, see [camera_housekeeping_registers.md](camera_housekeeping_registers.md).

@@ -9,6 +9,7 @@ A PySide6 GUI on the PC communicates with the gateway over ROS 2/DDS and allows 
 - connect and disconnect the SpaceWire link;
 - select an FPGA-generated image pattern;
 - request and display an image;
+- request camera housekeeping and inspect the decoded register snapshot;
 - monitor SpaceWire diagnostics.
 
 ## Architecture
@@ -101,7 +102,7 @@ On the PC:
 ./pc/start_pc.sh
 ```
 
-The GUI can then be used to connect the SpaceWire link and request camera images.
+The GUI can then be used to connect the SpaceWire link, request camera images and refresh camera housekeeping.
 
 ## Documentation
 
@@ -110,6 +111,7 @@ Detailed documentation is available in [`docs/`](docs/):
 - [Installation](docs/installation.md)
 - [Architecture](docs/architecture.md)
 - [ROS 2 interface](docs/ros_interface.md)
+- [Camera housekeeping registers](docs/camera_housekeeping_registers.md)
 - [Hardware](docs/hardware.md)
 - [Troubleshooting](docs/troubleshooting.md)
 

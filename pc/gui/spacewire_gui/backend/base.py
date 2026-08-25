@@ -13,7 +13,7 @@ Recommended layout::
         └── RosWorker(QObject)                # moved to QThread via moveToThread()
                 └── rclpy node, subscriptions, service clients
 
-- Use queued worker command signals for connect, disconnect, and image requests.
+- Use queued worker command signals for connect, disconnect, image, and housekeeping requests.
 - Set the gateway ``pattern`` parameter via ``AsyncParameterClient`` before
   calling ``/camera/request_image``.
 - RosWorker emits the same payload signals defined here; Qt automatically
@@ -35,6 +35,8 @@ from spacewire_gui.models.spacewire_status import SpaceWireStatus
 class SpaceWireBackend(QObject):
     status_updated = Signal(object)  # SpaceWireStatus
     image_received = Signal(object)  # QImage
+    housekeeping_updated = Signal(object)  # HousekeepingSnapshot
+    housekeeping_request_finished = Signal(bool, str)
     log_message = Signal(str)
     connection_error = Signal(str)
     busy_changed = Signal()
@@ -57,6 +59,9 @@ class SpaceWireBackend(QObject):
         raise NotImplementedError
 
     def request_image(self, pattern: int) -> None:
+        raise NotImplementedError
+
+    def request_housekeeping(self) -> None:
         raise NotImplementedError
 
     def get_status(self) -> SpaceWireStatus:

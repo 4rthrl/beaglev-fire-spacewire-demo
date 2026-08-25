@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -24,6 +24,12 @@ class _AspectRatioImageLabel(QLabel):
         super().__init__(parent)
         self._source_image: QImage | None = None
         self._use_fast_scale = False
+
+    def minimumSizeHint(self) -> QSize:  # type: ignore[override]
+        return QSize(200, 200)
+
+    def sizeHint(self) -> QSize:  # type: ignore[override]
+        return QSize(200, 200)
 
     def set_source_image(self, image: QImage, *, fast_scale: bool = False) -> None:
         self._source_image = image
@@ -70,17 +76,25 @@ class CameraPanel(QGroupBox):
         self._image_label = _AspectRatioImageLabel("No image")
         self._image_label.setObjectName("ImageFrame")
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._image_label.setMinimumSize(280, 280)
+        self._image_label.setMinimumSize(200, 200)
+        self._image_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         layout.addWidget(self._image_label, stretch=1)
 
         self._resolution_label = QLabel("Resolution: —")
         self._resolution_label.setObjectName("MutedLabel")
+        self._resolution_label.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Fixed,
+        )
         layout.addWidget(self._resolution_label)
 
         controls = QWidget()
         controls.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         controls_layout = QHBoxLayout(controls)
-        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setContentsMargins(0, 0, 0, 2)
         controls_layout.setSpacing(8)
 
         pattern_label = QLabel("Pattern")
@@ -90,6 +104,9 @@ class CameraPanel(QGroupBox):
         self._pattern_combo = QComboBox()
         self._pattern_combo.setObjectName("PatternCombo")
         self._pattern_combo.setFixedHeight(32)
+        self._pattern_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         for pattern_id in ALL_PATTERNS:
             self._pattern_combo.addItem(PATTERN_LABELS[pattern_id], pattern_id)
         self._pattern_combo.currentIndexChanged.connect(self._on_pattern_changed)

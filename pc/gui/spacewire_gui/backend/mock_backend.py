@@ -9,6 +9,7 @@ from PySide6.QtCore import QTimer
 
 from spacewire_gui.backend.base import SpaceWireBackend
 from spacewire_gui.backend.test_patterns import IMAGE_HEIGHT, IMAGE_WIDTH, generate_pattern
+from spacewire_gui.models.housekeeping_mapping import mock_housekeeping_snapshot
 from spacewire_gui.models.image_patterns import ALL_PATTERNS, PATTERN_LABELS, SOLID_RED
 from spacewire_gui.models.spacewire_status import SpaceWireStatus
 
@@ -27,9 +28,15 @@ class MockSpaceWireBackend(SpaceWireBackend):
         self._image_timer.setSingleShot(True)
         self._image_timer.timeout.connect(self._finish_image_request)
 
+        self._housekeeping_timer = QTimer(self)
+        self._housekeeping_timer.setSingleShot(True)
+        self._housekeeping_timer.timeout.connect(self._finish_housekeeping)
+
         self._pending_pattern: int | None = None
         self._selected_pattern = SOLID_RED
         self._operation_in_progress = False
+        self._tc_counter = 0
+        self._frame_counter = 0
 
     @property
     def backend_name(self) -> str:
@@ -66,6 +73,7 @@ class MockSpaceWireBackend(SpaceWireBackend):
 
         self._connect_timer.stop()
         self._image_timer.stop()
+        self._housekeeping_timer.stop()
         self._pending_pattern = None
         self._operation_in_progress = False
 
@@ -87,6 +95,11 @@ class MockSpaceWireBackend(SpaceWireBackend):
             return
         if self._image_timer.isActive():
             return
+        if self._housekeeping_timer.isActive():
+            self.connection_error.emit(
+                "Cannot request an image while housekeeping is in progress"
+            )
+            return
 
         self._selected_pattern = pattern
         label = PATTERN_LABELS.get(pattern, f"Pattern {pattern}")
@@ -95,6 +108,23 @@ class MockSpaceWireBackend(SpaceWireBackend):
         self._pending_pattern = pattern
         delay_ms = random.randint(300, 700)
         self._image_timer.start(delay_ms)
+
+    def request_housekeeping(self) -> None:
+        if not self._status.running or self._status.connecting:
+            message = "Housekeeping request rejected: link not running"
+            self.connection_error.emit(message)
+            self.housekeeping_request_finished.emit(False, message)
+            return
+        if self._housekeeping_timer.isActive():
+            return
+        if self._image_timer.isActive():
+            message = "Cannot request housekeeping while an image request is active"
+            self.connection_error.emit(message)
+            self.housekeeping_request_finished.emit(False, message)
+            return
+
+        self.log_message.emit("Housekeeping requested")
+        self._housekeeping_timer.start(250)
 
     def set_simulated_error(self, field: ErrorField, enabled: bool) -> None:
         setattr(self._status, field, enabled)
@@ -121,6 +151,7 @@ class MockSpaceWireBackend(SpaceWireBackend):
     def shutdown(self) -> None:
         self._connect_timer.stop()
         self._image_timer.stop()
+        self._housekeeping_timer.stop()
 
     def _finish_connect(self) -> None:
         self._operation_in_progress = False
@@ -142,9 +173,33 @@ class MockSpaceWireBackend(SpaceWireBackend):
 
         pattern = self._pending_pattern
         self._pending_pattern = None
+        self._tc_counter += 1
+        self._frame_counter += 1
         image = generate_pattern(pattern)
         self.image_received.emit(image)
         self.log_message.emit(f"Image received: {IMAGE_WIDTH}x{IMAGE_HEIGHT}")
+
+    def _finish_housekeeping(self) -> None:
+        if not self._status.running:
+            message = "SpaceWire link is not running"
+            self.housekeeping_request_finished.emit(False, message)
+            self.connection_error.emit(message)
+            return
+
+        self._tc_counter += 1
+        snapshot = mock_housekeeping_snapshot(
+            pattern=self._selected_pattern,
+            tc_counter=self._tc_counter,
+            frame_counter=self._frame_counter,
+        )
+        self.housekeeping_updated.emit(snapshot)
+        message = (
+            f"Camera housekeeping received; "
+            f"TC={self._tc_counter}, "
+            f"frames={self._frame_counter}"
+        )
+        self.log_message.emit(message)
+        self.housekeeping_request_finished.emit(True, message)
 
     def _emit_status(self) -> None:
         self.status_updated.emit(self._status.copy())

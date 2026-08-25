@@ -57,6 +57,21 @@ def load_stylesheet() -> str:
         color: #64748b;
     }
 
+    QLabel#OkStatus {
+        color: #15803d;
+        font-weight: 600;
+    }
+
+    QLabel#ErrorStatus {
+        color: #b91c1c;
+        font-weight: 600;
+    }
+
+    QLabel#UnavailableValue {
+        color: #94a3b8;
+        font-style: italic;
+    }
+
     QLabel#ImageFrame {
         background-color: #eef2f7;
         border: 1px solid #d8dee9;
@@ -169,8 +184,8 @@ def load_stylesheet() -> str:
         background-color: #ffffff;
         border: 1px solid #cbd5e1;
         border-radius: 4px;
-        padding: 4px 8px;
-        min-height: 24px;
+        padding: 2px 8px;
+        min-height: 22px;
     }
 
     QComboBox#PatternCombo:disabled {
@@ -188,6 +203,21 @@ def load_stylesheet() -> str:
         border: 1px solid #d8dee9;
         selection-background-color: #eff6ff;
         selection-color: #1d4ed8;
+    }
+
+    QScrollArea {
+        background-color: transparent;
+        border: 1px solid #d8dee9;
+        border-radius: 4px;
+    }
+
+    QWidget#FieldRow {
+        background-color: transparent;
+    }
+
+    QWidget#FieldRowSelected {
+        background-color: #eff6ff;
+        border-radius: 4px;
     }
 
     QPlainTextEdit#LogPanel {

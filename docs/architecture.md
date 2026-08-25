@@ -42,6 +42,8 @@ The GUI provides controls for:
 - selecting an image pattern;
 - requesting an image;
 - displaying received images;
+- requesting camera housekeeping and inspecting the decoded snapshot;
+- showing or hiding the Event Log from the View menu;
 - monitoring SpaceWire status and errors.
 
 The GUI communicates only through ROS 2 interfaces.
@@ -93,6 +95,7 @@ It provides:
 
 - SpaceWire connect and disconnect services;
 - camera image request service;
+- camera housekeeping request service and snapshot publication;
 - image publication;
 - diagnostic publication;
 - image-pattern parameter handling.
@@ -135,6 +138,7 @@ disconnect
 get_status
 request_image
 poll_image
+get_housekeeping
 ```
 
 into operations on the SpaceWire FPGA core and DMA controller.
@@ -294,7 +298,44 @@ The GUI subscribes to this topic and displays the image.
 
 ---
 
-# 10. Diagnostics
+# 10. Camera Housekeeping Path
+
+The GUI **Refresh Housekeeping** control follows:
+
+```text
+GUI
+ │
+ │ /spacewire/camera/get_housekeeping
+ ▼
+gateway.py
+ │
+ ▼
+beaglev.py / mock.py
+ │
+ ├── (hardware) prepare DMA for the 260-byte housekeeping packet
+ ├── transmit GET_HOUSEKEEPING (30 EOP)
+ └── decode the 256-byte register window
+        │
+        ▼
+gateway.py
+ │
+ │ diagnostic_msgs/DiagnosticArray
+ ▼
+/spacewire/camera/housekeeping
+ │
+ ▼
+PC GUI snapshot cache
+```
+
+One service call retrieves one coherent register bank. The GUI then lets the operator browse groups and fields locally. Further SpaceWire requests are not issued until the next Refresh.
+
+Housekeeping and image reception share the same DMA receiver on the real hardware backend, so a housekeeping request is rejected while an image request is in flight.
+
+The register protocol and decoded field meanings are documented in [camera_housekeeping_registers.md](camera_housekeeping_registers.md).
+
+---
+
+# 11. Diagnostics
 
 The gateway periodically reads the SpaceWire status and error registers.
 
@@ -323,7 +364,7 @@ The diagnostic aggregator is a monitoring component and is not required for the 
 
 ---
 
-# 11. Separation of Responsibilities
+# 12. Separation of Responsibilities
 
 The main software components have deliberately separate responsibilities:
 
@@ -342,7 +383,7 @@ This separation keeps the ROS interface independent from the implementation deta
 
 ---
 
-# 12. Repository Locations
+# 13. Repository Locations
 
 The relevant implementation files are located under:
 
@@ -354,5 +395,7 @@ board/gateware/
 ```
 
 For the exact ROS 2 topics, services and parameters, see [ros_interface.md](ros_interface.md).
+
+For the camera housekeeping register window, see [camera_housekeeping_registers.md](camera_housekeeping_registers.md).
 
 For board and FPGA details, see [hardware.md](hardware.md).

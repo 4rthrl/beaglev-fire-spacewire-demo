@@ -1,5 +1,6 @@
 """Data models for SpaceWire Camera Control."""
 
+from spacewire_gui.models.housekeeping import HousekeepingSnapshot
 from spacewire_gui.models.image_patterns import (
     COLOR_BOXES,
     HORIZONTAL_BW_GRADIENT,
@@ -17,6 +18,7 @@ __all__ = [
     "COLOR_BOXES",
     "HORIZONTAL_BW_GRADIENT",
     "HORIZONTAL_COLOR_BARS",
+    "HousekeepingSnapshot",
     "LinkConnectionState",
     "PATTERN_LABELS",
     "SOLID_BLUE",

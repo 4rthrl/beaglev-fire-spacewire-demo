@@ -261,6 +261,7 @@ The implemented commands are:
 | SET_BAYER | `11 BB EOP` |
 | CONFIGURE_AND_START | `12 PP BB EOP` |
 | RESET_CONFIGURATION | `20 EOP` |
+| GET_HOUSEKEEPING | `30 EOP` |
 
 `PP` is the image-pattern identifier.
 
@@ -273,6 +274,8 @@ The demonstrator uses the combined command:
 ```
 
 to configure the requested pattern and start an image transfer.
+
+`GET_HOUSEKEEPING` (`30 EOP`) returns the complete 256-byte camera register window. The packet format, register map and decoded meanings are documented in [camera_housekeeping_registers.md](camera_housekeeping_registers.md).
 
 ---
 

@@ -285,8 +285,11 @@ The GUI can then be used to:
 2. select an FPGA image pattern;
 3. request an image;
 4. display the received image;
-5. inspect link status and errors;
-6. disconnect the link.
+5. refresh camera housekeeping and inspect the decoded snapshot;
+6. inspect link status and errors;
+7. disconnect the link.
+
+The Event Log can be shown or hidden from **View → Event Log**.
 
 ---
 
@@ -299,6 +302,7 @@ The main ROS 2 topics are:
 /spacewire/diagnostics_agg
 /spacewire/diagnostics_toplevel_state
 /spacewire/camera/image
+/spacewire/camera/housekeeping
 ```
 
 The main services are:
@@ -307,6 +311,7 @@ The main services are:
 /spacewire/link/connect
 /spacewire/link/disconnect
 /spacewire/camera/request_image
+/spacewire/camera/get_housekeeping
 ```
 
 The main board runs:
@@ -329,6 +334,8 @@ Image-pattern selection uses the `pattern` parameter of:
 ```
 
 For the complete interface, see [ros_interface.md](ros_interface.md).
+
+For the camera housekeeping register map, see [camera_housekeeping_registers.md](camera_housekeeping_registers.md).
 
 ---
 

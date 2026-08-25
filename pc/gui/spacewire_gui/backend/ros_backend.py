@@ -28,6 +28,7 @@ class RosSpaceWireBackend(SpaceWireBackend):
 
         self._worker.status_ready.connect(self._on_status_ready)
         self._worker.image_ready.connect(self._on_image_ready)
+        self._worker.housekeeping_ready.connect(self._on_housekeeping_ready)
         self._worker.operation_finished.connect(self._on_operation_finished)
         self._worker.worker_log.connect(self.log_message.emit)
         self._worker.worker_error.connect(self.connection_error.emit)
@@ -80,6 +81,18 @@ class RosSpaceWireBackend(SpaceWireBackend):
         self.log_message.emit(f"{label} image requested")
         self._worker.capture_requested.emit(pattern)
 
+    def request_housekeeping(self) -> None:
+        if self._shutting_down:
+            return
+        if not self._cached_status.image_requests_available():
+            message = "Housekeeping request rejected: link not running"
+            self.connection_error.emit(message)
+            self.housekeeping_request_finished.emit(False, message)
+            return
+
+        self.log_message.emit("Housekeeping requested")
+        self._worker.housekeeping_requested.emit()
+
     def set_pattern(self, pattern: int) -> None:
         if self._shutting_down:
             return
@@ -105,9 +118,14 @@ class RosSpaceWireBackend(SpaceWireBackend):
         self.image_received.emit(image)
         self.log_message.emit(f"Image received: {image.width()}x{image.height()}")
 
+    def _on_housekeeping_ready(self, snapshot: object) -> None:
+        self.housekeeping_updated.emit(snapshot)
+
     def _on_operation_finished(self, operation: str, success: bool, message: str) -> None:
         if operation in {"connect", "disconnect"}:
             self._connect_op_pending = False
             self.busy_changed.emit()
             if success and operation == "disconnect":
                 self.log_message.emit("SpaceWire disconnected")
+        elif operation == "housekeeping":
+            self.housekeeping_request_finished.emit(success, message)
