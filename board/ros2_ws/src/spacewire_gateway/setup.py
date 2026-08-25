@@ -20,10 +20,13 @@ setup(
             glob('launch/*launch.py'),
         ),
     ],
+    package_data={
+        'spacewire_gateway.hardware.lowlevel': ['libmmio32.so'],
+    },
     install_requires=['setuptools'],
-    zip_safe=True,
-    maintainer='4rthrl',
-    maintainer_email='arthurlenders@hotmail.com',
+    zip_safe=False,
+    maintainer='arthur-24',
+    maintainer_email='arthur-24@todo.todo',
     description='ROS 2 gateway for the BeagleV-Fire SpaceWire interface',
     license='Apache-2.0',
     extras_require={

@@ -101,6 +101,27 @@ def phys_zero(address, size):
         os.close(fd)
 
 
+def phys_write(address, data):
+    """Write bytes to a contiguous physical-memory range using one mmap."""
+    if not data:
+        return
+
+    fd = os.open("/dev/mem", os.O_RDWR | os.O_SYNC)
+    try:
+        mm, offset = _map_phys(
+            fd,
+            address,
+            len(data),
+            mmap.PROT_READ | mmap.PROT_WRITE,
+        )
+        try:
+            mm[offset:offset + len(data)] = data
+        finally:
+            mm.close()
+    finally:
+        os.close(fd)
+
+
 def phys_read(address, size):
     """Read a contiguous physical-memory range using one mmap."""
     if size <= 0:
@@ -118,8 +139,8 @@ def phys_read(address, size):
 
 
 class Debugger:
-    def __init__(self):
-        self.access = DevMem2Access()
+    def __init__(self, access=None):
+        self.access = access if access is not None else DevMem2Access()
 
         # The generated IP-XACT Python model describes the SpaceWire APB block.
         self.spw = spacewire_type(
@@ -359,10 +380,17 @@ class Debugger:
         # separate devmem2 processes.
         phys_zero(RX_BUF, count + 4)
 
-        # Descriptor: config, count, destination.
-        self.access.write32(DESC_ADDR + 0x0, DESC_CONFIG)
-        self.access.write32(DESC_ADDR + 0x4, count)
-        self.access.write32(DESC_ADDR + 0x8, RX_BUF)
+        # Descriptor lives in normal DDR, not side-effect MMIO.
+        # Write config/count/destination together using one mmap operation.
+        phys_write(
+            DESC_ADDR,
+            struct.pack(
+                "<III",
+                DESC_CONFIG,
+                count,
+                RX_BUF,
+            ),
+        )
 
         self.access.write32(DMA_MASK, 0x1)
         self.access.write32(DMA_STREAM0_DESC, DESC_ADDR)

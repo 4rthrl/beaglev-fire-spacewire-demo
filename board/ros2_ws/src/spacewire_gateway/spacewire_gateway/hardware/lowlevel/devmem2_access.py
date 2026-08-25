@@ -39,8 +39,16 @@ class DevMem2Access(accesLayer):
 
     def write32(self, addr, value):
         value &= 0xFFFFFFFF
-        self._run(f"0x{addr:X}", "w", f"0x{value:X}")
-        return self.read32(addr)
+        output = self._run(
+            f"0x{addr:X}",
+            "w",
+            f"0x{value:X}",
+        )
+
+        # devmem2 already performs and prints a 32-bit readback after
+        # the write. Reuse that value instead of launching a second
+        # devmem2 process purely for verification.
+        return self._extract_last_hex(output)
 
     def read_register(self, addr, offset=0, width=32):
         value = self.read32(addr)

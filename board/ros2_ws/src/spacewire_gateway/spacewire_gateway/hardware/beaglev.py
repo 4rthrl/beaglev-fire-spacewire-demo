@@ -30,7 +30,7 @@ from spacewire_gateway.hardware.base import (
     SpaceWireHardware,
     SpaceWireStatus,
 )
-from spacewire_gateway.hardware.lowlevel.spw_debug_devmem2 import Debugger
+from spacewire_gateway.hardware.lowlevel.fast_debugger import FastDebugger
 
 
 _IMAGE_WIDTH = 64
@@ -62,7 +62,7 @@ _REQUEST_TIMEOUT_S = 1.5
 class BeagleVSpaceWireHardware(SpaceWireHardware):
 
     def __init__(self, max_retries: int = 1) -> None:
-        self._debugger = Debugger()
+        self._debugger = FastDebugger()
 
         self._current_pattern: int | None = None
         self._request_in_flight = False
@@ -244,7 +244,7 @@ class BeagleVSpaceWireHardware(SpaceWireHardware):
                 if time.monotonic() >= deadline:
                     return False, "Housekeeping receive timeout", None
 
-                time.sleep(0.02)
+                time.sleep(0.0002)
 
             packet = self._debugger.dma_read_bytes(
                 _HOUSEKEEPING_PACKET_BYTES
@@ -258,6 +258,7 @@ class BeagleVSpaceWireHardware(SpaceWireHardware):
 
     def shutdown(self) -> None:
         self._clear_request_state()
+        self._debugger.close()
 
     # ------------------------------------------------------------------
     # Private helpers
